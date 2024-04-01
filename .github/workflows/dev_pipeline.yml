@@ -1,0 +1,105 @@
+name: Dev Pipeline
+
+on: workflow_dispatch
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REGISTRY: 762022205851.dkr.ecr.us-west-2.amazonaws.com
+  APP_NAME: tms-service-prod
+  AWS_CLUSTER_NAME_DEV: tms-dev-eks-OocW
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-bookworm
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      SQLALCHEMY_DATABASE_URI: 'postgresql://testuser:testpassword@localhost:5432/tms_pipeline'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.12.0'
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+      - name: Configure Poetry
+        run: |
+          poetry config virtualenvs.create false  # Avoid creating virtualenv
+      - name: Install dependencies with Poetry
+        run: |
+          poetry install
+      - name: Run tests with coverage using Poetry
+        run: |
+          poetry run pytest --cov=app
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to Amazon ECR
+        run: aws ecr get-login-password | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+      - name: Build and push Docker image
+        run: |
+          docker build --tag ${{ env.ECR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }} .
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Set up Kubectl
+        run: |
+          aws eks --region ${{ env.AWS_REGION }} update-kubeconfig --name ${{ env.AWS_CLUSTER_NAME_DEV }}
+      - name: Retrieve .env from AWS Secrets Manager
+        run: |
+          SECRET_VALUES_JSON=$(aws secretsmanager get-secret-value --secret-id ${{ secrets.TMS_DEV_SECRETS }} --query SecretString --output text)
+          echo "$SECRET_VALUES_JSON" | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' > kube/base/.env
+          echo "SQLALCHEMY_DATABASE_URI=$(echo $SECRET_VALUES_JSON | jq -r .SQLALCHEMY_DATABASE_URI)" >> $GITHUB_ENV
+      - name: Deploy to dev
+        run: |
+          sed -i "s/<VERSION>/${{ github.sha }}/g" kube/base/kustomization.yaml
+          sed -i "s/<DOCKER_HOST>/${{ env.ECR_REGISTRY }}/g" kube/base/kustomization.yaml
+          sed -i "s/<DOCKER_REPO>/${{ env.APP_NAME }}/g" kube/base/kustomization.yaml
+          kubectl apply -k kube/base
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.12.0'
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+      - name: Configure Poetry
+        run: |
+          poetry config virtualenvs.create false  # Avoid creating virtualenv
+      - name: Install dependencies with Poetry
+        run: |
+          poetry install
+      - name: Run Migrations
+        run: |
+          poetry run flask db upgrade

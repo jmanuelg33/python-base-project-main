@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tms-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tms-service
+  template:
+    metadata:
+      labels:
+        app: tms-service
+    spec:
+      containers:
+      - name: tms-service
+        image: tms-service
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        envFrom:
+          - configMapRef:
+              name: tms-service-config

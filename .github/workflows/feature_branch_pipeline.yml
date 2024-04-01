@@ -1,0 +1,39 @@
+name: PR Pipeline
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-bookworm
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      SQLALCHEMY_DATABASE_URI: 'postgresql://testuser:testpassword@localhost:5432/tms_pipeline'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.12.0'
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+      - name: Configure Poetry
+        run: |
+          poetry config virtualenvs.create false  # Avoid creating virtualenv
+      - name: Install dependencies with Poetry
+        run: |
+          poetry install
+      - name: Run tests with coverage using Poetry
+        run: |
+          poetry run pytest --cov=app

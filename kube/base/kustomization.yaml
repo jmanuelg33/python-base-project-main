@@ -1,0 +1,13 @@
+resources:
+  - deployment.yaml
+  - service.yaml
+
+images:
+  - name: tms-service
+    newName: <DOCKER_HOST>/<DOCKER_REPO>
+    newTag: <VERSION>
+
+configMapGenerator:
+  - name: tms-service-config
+    envs:
+      - .env
