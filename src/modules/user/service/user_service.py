@@ -8,12 +8,12 @@ class UserService:
         self.__user_dao = UserDAO()
 
     def verify_login(self, dto: LoginDTO):
-        user = self.__user_dao.search(email=dto.email)
+        users = self.__user_dao.search(email=dto.email)
 
-        if not len(user) > 0:
+        if not len(users) > 0:
             raise EmailNotRegisteredException(message="email not registered")
 
-        if user[0].check_password(dto.password):
+        if users[0].check_password(dto.password):
             raise InvalidCredentialsException(message="invalid credentials")
 
-        return user[0]
+        return users[0]
