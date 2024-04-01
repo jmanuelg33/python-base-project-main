@@ -41,6 +41,7 @@ flask-openapi3 = "^3.0.1"
 flask-jwt-extended = "^4.6.0"
 email-validator = "^2.1.1"
 flask-seeder = "^1.2.0"
+setuptools = "^69.2.0"
 
 
 [tool.poetry.group.dev.dependencies]

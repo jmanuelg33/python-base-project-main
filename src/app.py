@@ -12,8 +12,8 @@ CONFIG = {
     'SENTRY_DSN': os.getenv('SENTRY_DSN'),
     'FLASK_ENV': os.getenv('FLASK_ENV', 'development'),
     'JWT_SECRET_KEY': os.getenv('JWT_SECRET_KEY'),
-    'ACCESS_TOKEN_EXPIRES': int(os.getenv('ACCESS_TOKEN_EXPIRES')),
-    'REFRESH_TOKEN_EXPIRES': int(os.getenv('REFRESH_TOKEN_EXPIRES'))
+    'ACCESS_TOKEN_EXPIRES': int(os.getenv('ACCESS_TOKEN_EXPIRES', 3600)),
+    'REFRESH_TOKEN_EXPIRES': int(os.getenv('REFRESH_TOKEN_EXPIRES', 86400))
 }
 
 app = create_app(config=CONFIG)
