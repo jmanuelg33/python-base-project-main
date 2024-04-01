@@ -44,7 +44,7 @@ jobs:
           poetry install
       - name: Run tests with coverage using Poetry
         run: |
-          poetry run pytest --disable-warnings -s --cov
+          poetry run pytest --cov
 
   build:
     needs: test
